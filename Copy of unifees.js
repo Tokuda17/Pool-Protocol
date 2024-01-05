@@ -1,0 +1,84 @@
+const ethers = require("ethers");
+const web = require("./web3.js");
+const wall = require("./wallet.js");
+const unic = require("./unicache.js");
+web3 = web.web3;
+const BigNumber = require('big-number');
+const feesMap = new Map();
+
+const providerOp = new ethers.ethers.JsonRpcProvider("https://opt-mainnet.g.alchemy.com/v2/rHtq3eFE7jm_xUmUNJOOOg4LR9wngukb","optimism");
+const providerPoly = new ethers.ethers.JsonRpcProvider("https://polygon-mainnet.g.alchemy.com/v2/AmllS7MVSHEnkL8dxIWD0QiDQhMWe5Ry");
+
+const NF_POSITION_MANAGER_ADDRESS = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88";
+const uniABI = require("./ABI/UniswapV3.json");
+
+async function getFees(walletAddress,tid)
+{
+  try {
+    const signer = new ethers.ethers.Wallet(
+      wall.getPrivateKey(),
+      providerOp
+    );
+    let fmap = feesMap.get(parseInt(tid));
+    let f0;
+    let f1;
+    if (fmap)
+    {
+      console.log("FOUND FEES", fmap);
+      f0 = fmap["f0"];
+      f1 = fmap["f1"];
+      return {f0,f1};
+    }
+    //let f = unic.readTagId("unifees",tid);
+    //  console.log("cached FEES=",f);
+    //console.log("Getting fees for ", walletAddress, tid);
+    //throw new Error("test error");
+    let provider; 
+    let m0,m1;
+    provider = providerOp;
+    m0 = "100000000000000000000000";
+    m1 = "100000000000000000000000";
+    let c = new ethers.Contract(NF_POSITION_MANAGER_ADDRESS, uniABI, provider);
+    //console.log("contract c=",c);
+    let results = await c.collect.staticCall(
+      {tokenId: tid,
+       recipient: walletAddress,
+       amount0Max: m0,
+       amount1Max: m1}, {from: walletAddress});
+    //console.log("collect fees result", results);
+    let a1 = results.amount0.toString();
+    let a0 = results.amount1.toString();
+    console.log("a0=",a0,"a1=",a1);
+    f0 = parseInt(BigNumber(a0).div(BigNumber(10).pow(18-6)))/1000000;
+    f1 = parseInt(BigNumber(a1).div(BigNumber(10).pow(18-6)))/1000000;
+    //let f1 = Math.floor(parseInt(a1)/10000)/100;
+    unic.writeTagId("unifees",tid,{f0: f0, f1: f1});
+    feesMap.set(parseInt(tid),{f0:f0,f1:f1});
+    return {f0,f1};
+  } catch (e) {
+    console.log(e.message);
+    let f = unic.readTagId("unifees",tid);
+    if (f) 
+    {
+      console.log("RETURNING f=",f, f["f0"],f["f1"]);
+      let f0 = f["f0"];
+      let f1 = f["f1"];
+      return {f0,f1};
+    }
+    throw new Error(e.message+" => getFees failed");
+  }
+}
+
+async function main()
+{
+  let {f0,f1} = await getFees("0x0fFeb87106910EEfc69c1902F411B431fFc424FF",403972);
+  //{f0,f1} = await getFees("0x0fFeb87106910EEfc69c1902F411B431fFc424FF",431734);
+console.log("Fee0:",f0);
+console.log("Fee1:",f1);
+}
+
+//main();
+
+module.exports = Object.assign({
+  getFees
+}); 
