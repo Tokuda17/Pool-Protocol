@@ -1,0 +1,11 @@
+const pool = require("./poolV3.js");
+const portfolio = require("./portfolioOp.js");
+
+async function main()
+{     
+  let port = portfolio.get(); 
+  console.log("port=",port);
+  let pos = await pool.calculate(port,false);
+}  
+
+main()
